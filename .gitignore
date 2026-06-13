@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# VS Code
+.vscode/
+
+# PyCharm
+.idea/
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment Variables
+.env
+
+# Model Weights
+*.pt
+*.pth
+*.onnx
+
+# Generated Videos
+data/output/*
+!data/output/.gitkeep
+
+# Dataset Files
+data/input/*
+!data/input/.gitkeep
+
+# Results
+results/*
+!results/.gitkeep
+
+# Streamlit Cache
+.streamlit/
+
+# Build Files
+build/
+dist/
+*.egg-info/
+
+# Coverage
+.coverage
+htmlcov/

@@ -1,0 +1,30 @@
+# Deep Learning
+ultralytics
+torch
+torchvision
+
+# Computer Vision
+opencv-python
+supervision
+
+# Numerical Computing
+numpy
+scipy
+
+# Data Analysis
+pandas
+
+# Visualization
+matplotlib
+seaborn
+
+# Dashboard
+streamlit
+
+# Utilities
+tqdm
+PyYAML
+
+# Jupyter Notebooks
+jupyter
+ipykernel
