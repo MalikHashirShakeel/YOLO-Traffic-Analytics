@@ -32,17 +32,26 @@ Thumbs.db
 *.pth
 *.onnx
 
-# Generated Videos
-data/output/*
-!data/output/.gitkeep
-
-# Dataset Files
+# Input Videos
 data/input/*
 !data/input/.gitkeep
+
+# Output Videos
+data/output/*
+!data/output/.gitkeep
 
 # Results
 results/*
 !results/.gitkeep
+
+# Video Files Anywhere
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.wmv
+*.flv
+*.webm
 
 # Streamlit Cache
 .streamlit/
