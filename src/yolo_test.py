@@ -2,6 +2,6 @@
 
 from ultralytics import YOLO
 
-model = YOLO("yolov8n.pt")
+YOLO("yolov8m.pt")
 
 print("Model loaded successfully!")
