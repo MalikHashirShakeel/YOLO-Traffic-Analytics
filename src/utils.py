@@ -62,14 +62,6 @@ def update_class(track_id, cls_id, confidence,
     """
     Append (cls_id, confidence) to the vote history for track_id,
     resolve the winning class, and store it in track_class[track_id].
-
-    Args:
-        track_id:          int
-        cls_id:            int  — raw YOLO class from this frame
-        confidence:        float
-        track_class_votes: defaultdict(list)  — mutated in place
-        track_class:       dict               — mutated in place
-        window:            int  — how many recent frames to keep (default 15)
     """
     track_class_votes[track_id].append((cls_id, confidence))
     if len(track_class_votes[track_id]) > window:
@@ -84,13 +76,12 @@ def update_class(track_id, cls_id, confidence,
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3. SPEED ESTIMATION — pixels-per-meter + smoothed speed
+# 3. SPEED ESTIMATION
 # ─────────────────────────────────────────────────────────────────────────────
 
 def get_pixels_per_meter(y_position, frame_height):
     """
     Perspective-corrected PPM for a forward-facing traffic camera.
-    Calibrated so speed stays consistent (~55-60 km/h) across the full frame.
       - Top    (ratio~0.0): ~2.5  PPM
       - Middle (ratio~0.5): ~50   PPM
       - Bottom (ratio~1.0): ~365  PPM
@@ -107,16 +98,7 @@ def estimate_speed(track_id, track_history, track_speeds, video_fps, frame_heigh
     Compute the smoothed speed (km/h) for track_id from its recent position history.
     Mirrors the exact logic in speed_estimator.py.
 
-    Args:
-        track_id:      int
-        track_history: defaultdict(list) of (x, y) centres
-        track_speeds:  defaultdict(list) of recent speed samples — mutated in place
-        video_fps:     float
-        frame_height:  int
-
-    Returns:
-        avg_speed (float) if enough history exists and time has elapsed,
-        otherwise None.
+    Returns avg_speed (float) or None if not enough data.
     """
     history = track_history[track_id]
     if len(history) < 6:
@@ -130,7 +112,7 @@ def estimate_speed(track_id, track_history, track_speeds, video_fps, frame_heigh
     if time_elapsed <= 0:
         return None
 
-    avg_y        = np.mean(recent_points[:, 1])
+    avg_y         = np.mean(recent_points[:, 1])
     effective_ppm = get_pixels_per_meter(avg_y, frame_height)
 
     speed_mps = pixel_distance / time_elapsed / effective_ppm
@@ -155,16 +137,8 @@ def estimate_speed(track_id, track_history, track_speeds, video_fps, frame_heigh
 def check_line_cross(track_id, track_history, track_class,
                      track_crossed, vehicle_counter, line_y):
     """
-    If track_id's centre just crossed line_y (upward → downward),
+    If track_id's centre just crossed line_y downward,
     increment vehicle_counter and mark the track as crossed.
-
-    Args:
-        track_id:        int
-        track_history:   defaultdict(list)
-        track_class:     dict
-        track_crossed:   set  — mutated in place
-        vehicle_counter: Counter — mutated in place
-        line_y:          int
     """
     if track_id in track_crossed:
         return
@@ -176,7 +150,79 @@ def check_line_cross(track_id, track_history, track_class,
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 5. DRAWING HELPERS
+# 5. DENSITY — zone check, level classification, panel drawing
+# ─────────────────────────────────────────────────────────────────────────────
+
+DENSITY_THRESHOLDS = {
+    "LOW":    4,
+    "MEDIUM": 5,
+    "HIGH":   13,
+}
+
+def get_density_level(vehicle_count: int):
+    """
+    Classify vehicle count into a density level.
+
+    Returns:
+        (level: str, color: tuple, description: str)
+    """
+    if vehicle_count <= DENSITY_THRESHOLDS["LOW"]:
+        return "LOW",    (0, 255,   0),   "Light Traffic"
+    elif vehicle_count <= DENSITY_THRESHOLDS["MEDIUM"]:
+        return "MEDIUM", (0, 255, 255),   "Moderate Traffic"
+    elif vehicle_count <= DENSITY_THRESHOLDS["HIGH"]:
+        return "HIGH",   (0, 165, 255),   "Heavy Traffic"
+    else:
+        return "JAM",    (0,   0, 255),   "CONGESTION / JAM"
+
+
+def is_in_zone(center, density_zone):
+    """
+    Returns True if center point is inside the density polygon.
+
+    Args:
+        center:       (int, int)
+        density_zone: np.array of polygon points
+    """
+    return cv2.pointPolygonTest(density_zone, center, False) >= 0
+
+
+def draw_density_panel(frame, frame_count, vehicle_count,
+                       density_level, description, color,
+                       frame_width, frame_height):
+    """
+    Draw the left info panel, right status badge, and progress bar
+    onto frame in place. Exact same layout as density_estimator.py.
+    """
+    # Left info panel
+    panel_x = 15
+    cv2.rectangle(frame, (panel_x - 5, 10), (panel_x + 380, 190), (0, 0, 0), -1)
+    texts = [
+        f"Frame: {frame_count}",
+        f"Vehicles in Zone: {vehicle_count}",
+        f"Density Level: {density_level}",
+        f"Status: {description}",
+    ]
+    for i, text in enumerate(texts):
+        cv2.putText(frame, text, (panel_x, 40 + i * 35),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+
+    # Right status badge
+    cv2.rectangle(frame, (frame_width - 320, 25), (frame_width - 20, 110), (0, 0, 0), -1)
+    cv2.putText(frame, "TRAFFIC DENSITY", (frame_width - 305, 55),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2)
+    cv2.putText(frame, density_level, (frame_width - 240, 95),
+                cv2.FONT_HERSHEY_SIMPLEX, 1.3, color, 4)
+
+    # Progress bar
+    bar_width = 280
+    fill = int(bar_width * min(vehicle_count / 15, 1.0))
+    cv2.rectangle(frame, (frame_width - 300, 125), (frame_width - 20,  155), (60, 60, 60), -1)
+    cv2.rectangle(frame, (frame_width - 300, 125), (frame_width - 300 + fill, 155), color, -1)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 6. DRAWING HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
 
 def draw_box_label(frame, x1, y1, x2, y2, label,
